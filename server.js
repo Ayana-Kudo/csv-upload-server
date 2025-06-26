@@ -22,6 +22,10 @@ if (!fs.existsSync(csvPath)) {
   );
 }
 
+app.get("/", (req, res) => {
+  res.send("OK");
+});
+
 // POSTリクエスト受け取り
 app.post("/upload", (req, res) => {
   const {
