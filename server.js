@@ -6,14 +6,13 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// 💡 JSONサイズ制限を5MBに拡張
 app.use(express.json({ limit: "5mb" }));
 app.use(cors());
 
 // CSVファイルのパス
 const csvPath = path.join(__dirname, "responses.csv");
 
-// 初期ヘッダー（ファイルがないときに作成）
+// CSVがなければヘッダー付きで作成
 if (!fs.existsSync(csvPath)) {
   fs.writeFileSync(
     csvPath,
@@ -22,11 +21,7 @@ if (!fs.existsSync(csvPath)) {
   );
 }
 
-app.get("/", (req, res) => {
-  res.send("OK");
-});
-
-// POSTリクエスト受け取り
+// 📥 フォーム送信を受け取ってCSVに保存
 app.post("/upload", (req, res) => {
   const {
     name,
@@ -43,7 +38,7 @@ app.post("/upload", (req, res) => {
 
   const now = new Date().toISOString();
 
-  // 各フィールドをCSVに合わせてエスケープ
+  // CSV用にエスケープ
   const escape = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
 
   const row = [
@@ -70,7 +65,57 @@ app.post("/upload", (req, res) => {
   });
 });
 
-// サーバー起動
+// 🌐 ヘルスチェック用
+app.get("/", (req, res) => {
+  res.send("OK");
+});
+
+// 📄 CSVファイルの中身をHTMLで一覧表示
+app.get("/responses", (req, res) => {
+  fs.readFile(csvPath, "utf8", (err, data) => {
+    if (err) {
+      return res.status(500).send("CSVの読み込みに失敗しました");
+    }
+
+    const rows = data.trim().split("\n").map(r => r.split(","));
+    const headers = rows[0];
+    const body = rows.slice(1);
+
+    const html = `
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>アンケート結果</title>
+        <style>
+          body { font-family: sans-serif; margin: 2em; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+          th { background-color: #f4f4f4; }
+        </style>
+      </head>
+      <body>
+        <h2>アンケート結果一覧</h2>
+        <p><a href="/download" download>📥 CSVファイルをダウンロード</a></p>
+        <table>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${body.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  });
+});
+
+// ⬇️ CSVファイルをダウンロードできるリンク
+app.get("/download", (req, res) => {
+  res.download(csvPath, "responses.csv");
+});
+
+// 🚀 サーバー起動
 app.listen(PORT, () => {
   console.log(`📡 Server running on port ${PORT}`);
 });
