@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>サウンドウォーク アンケート</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 40px auto; max-width: 600px; }
+    input, textarea, button, select {
+      font-size: 1rem; padding: 10px; margin: 8px; width: 90%; max-width: 500px;
+    }
+    .screen, .surveyPage { display: none; }
+    #video, #previewImage { width: 90%; max-width: 400px; margin: 10px 0; }
+    #progressContainer { width: 100%; background: #ddd; height: 10px; margin: 20px 0; }
+    #progressBar { height: 100%; width: 0%; background: #4caf50; transition: width 0.4s; }
+  </style>
+</head>
+<body>
+
+<!-- 🚀 スタート画面 -->
+<div id="startScreen" class="screen" style="display: block;">
+  <h1>サウンドウォーク</h1>
+  <button onclick="goToInput()">始める</button>
+</div>
+
+<!-- 📝 入力画面 -->
+<div id="inputScreen" class="screen">
+  <h2>名前・性別・年齢を入力してください</h2>
+   <input type="text" id="name" placeholder="名前"><br>
+   <select id="gender">
+     <option value="">性別を選んでください</option>
+     <option value="男性">男性</option>
+     <option value="女性">女性</option>
+   </select><br>
+   <input type="number" id="age" placeholder="年齢"><br>
+   <button onclick="requestPermissions()">次へ</button>
+</div>
+
+<!-- 📷 撮影画面 -->
+<div id="cameraScreen" class="screen">
+  <h2>撮影してください</h2>
+  <video id="video" autoplay playsinline></video><br>
+  <canvas id="canvas" style="display:none;"></canvas><br>
+  <button onclick="capture()">撮影</button>
+</div>
+
+<!-- 🖼 プレビュー画面 -->
+<div id="previewScreen" class="screen">
+  <h2>この画像を使用しますか？</h2>
+  <img id="previewImage" src=""><br>
+  <button onclick="goToSurvey()">使用する</button>
+  <button onclick="retake()">再撮影</button>
+</div>
+
+<!-- 📝 アンケート画面 -->
+<div id="surveyScreen" class="screen">
+  <h2>音に関するアンケート</h2>
+  <div id="progressContainer"><div id="progressBar"></div></div>
+
+  <!-- Q1 -->
+  <div id="q1Page" class="surveyPage">
+    <h3>Q1. 何の音ですか？</h3>
+    <textarea id="q1" rows="4" placeholder="自由に答えてください..."></textarea><br>
+    <button onclick="nextSurveyPage()">次へ</button>
+  </div>
+
+  <!-- Q2 -->
+  <div id="q2Page" class="surveyPage">
+    <h3>Q2. 音の評価は？</h3>
+    <label><input type="radio" name="q2" value="良い"> 良い</label><br>
+    <label><input type="radio" name="q2" value="悪い"> 悪い</label><br>
+    <label><input type="radio" name="q2" value="どちらでもない"> どちらでもない</label><br>
+    <button onclick="prevSurveyPage()">戻る</button>
+    <button onclick="nextSurveyPage()">次へ</button>
+  </div>
+
+  <!-- Q3 -->
+  <div id="q3Page" class="surveyPage">
+   <h3 id="q3Prompt" style="text-align: left;">Q3.</h3>
+   <textarea id="q3" rows="4" placeholder="理由を自由にご記入ください..."></textarea>
+    <button onclick="prevSurveyPage()">戻る</button>
+    <button onclick="nextSurveyPage()">次へ</button>
+  </div>
+  
+  <!-- Q4 -->
+  <div id="q4Page" class="surveyPage">
+    <h3 id="q4Prompt" style="text-align: left;">Q4.</h3>
+    <textarea id="q4" rows="4" placeholder="..."></textarea><br>
+    <button onclick="prevSurveyPage()">戻る</button>
+    <button onclick="completeSurvey()">完了</button>
+  </div>
+
+</div>
+
+<!-- ✅ 完了画面 -->
+<div id="doneScreen" class="screen">
+  <h2>入力が完了しました！</h2>
+  <p>ご協力ありがとうございました。</p>
+  <button onclick="location.reload()">最初に戻る</button>
+</div>
+
+<script>
+let latitude = null, longitude = null, weather = "不明";
+let currentSurvey = 1;
+const totalSurvey = 4;
+
+function goToInput() {
+  switchScreen("inputScreen");
+}
+
+function requestPermissions() {
+  const name = document.getElementById("name").value.trim();
+  const gender = document.getElementById("gender").value;
+  const age = document.getElementById("age").value.trim();
+
+  if (!name || !gender || !age) {
+    alert("名前・性別・年齢すべてを入力してください");
+    return;
+  }
+
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    document.getElementById("video").srcObject = stream;
+    switchScreen("cameraScreen");
+  }).catch(() => {
+    alert("カメラの使用が許可されていません");
+  });
+}
+
+  navigator.geolocation.getCurrentPosition(pos => {
+    latitude = pos.coords.latitude;
+    longitude = pos.coords.longitude;
+    getWeather();
+  });
+
+  navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    document.getElementById("video").srcObject = stream;
+    switchScreen("cameraScreen");
+  }).catch(() => {
+    alert("カメラの使用が許可されていません");
+  });
+}
+
+function getWeather() {
+  const apiKey = "ここにAPIキー"; // ★天気取得にはキーが必要
+  fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=ja`)
+    .then(res => res.json())
+    .then(data => {
+      weather = `${data.weather[0].description}（${data.main.temp}℃）`;
+    });
+}
+
+function switchScreen(id) {
+  document.querySelectorAll(".screen").forEach(el => el.style.display = "none");
+  document.getElementById(id).style.display = "block";
+}
+
+function capture() {
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+  ctx.fillStyle = "white";
+  ctx.font = "20px sans-serif";
+  ctx.fillText(`${name} / ${gender} / ${age}歳`, 10, 30);
+  ctx.fillText(weather, 10, 60);
+
+  document.getElementById("previewImage").src = canvas.toDataURL("image/png");
+  switchScreen("previewScreen");
+}
+
+function retake() {
+  switchScreen("cameraScreen");
+}
+
+function goToSurvey() {
+  switchScreen("surveyScreen");
+  showSurveyPage(1);
+}
+
+function showSurveyPage(id) {
+  document.querySelectorAll(".surveyPage").forEach(p => p.style.display = "none");
+  const el = document.getElementById(`q${id}Page`);
+  if (el) el.style.display = "block";
+
+  currentSurvey = id;
+  document.getElementById("progressBar").style.width = `${(id / totalSurvey) * 100}%`;
+
+  if (id === 3) {
+    const q1 = document.getElementById("q1").value.trim();
+    const q2 = document.querySelector('input[name="q2"]:checked')?.value || "";
+    document.getElementById("q3Template").innerText = `Q3.「${q1}」が「${q2}」と感じた理由は何ですか？`;
+  }
+
+　if (id === 4) {
+  　const q2 = document.querySelector('input[name="q2"]:checked')?.value || "";
+ 　 const q3 = document.getElementById("q3").value.trim();
+  　document.getElementById("q4Prompt").innerText = `Q4. なぜ「${q3}」だと「${q2}」と思うのですか？`;
+　}
+
+}
+
+function nextSurveyPage() {
+  if (currentSurvey < totalSurvey) {
+    showSurveyPage(currentSurvey + 1);
+  }
+}
+
+function prevSurveyPage() {
+  if (currentSurvey > 1) {
+    showSurveyPage(currentSurvey - 1);
+  }
+}
+
+function completeSurvey() {
+  const q1 = document.getElementById("q1").value.trim();
+  const q2 = document.querySelector('input[name="q2"]:checked')?.value || "";
+  const q3 = document.getElementById("q3").value.trim();
+　const q4 = document.getElementById("q4").value.trim();
+  const imageData = document.getElementById("canvas").toDataURL("image/png");
+
+  // 保存：アンケート内容
+  const text = `名前：${document.getElementById("name").value}\n緯度経度：${latitude}, ${longitude}\n天気：${weather}\n\nQ1：${q1}\nQ2：${q2}\nQ3：${q3}Q4：${q4}`;//
+  const blob = new Blob([text], {type: "text/plain"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `回答_${Date.now()}.txt`;
+  link.click();
+
+  // 保存：画像
+  const a = document.createElement("a");
+  a.href = imageData;
+  a.download = `画像_${Date.now()}.png`;
+  a.click();
+
+  // （オプション）送信処理
+  fetch("https://csv-upload-api-vcnd.onrender.com/upload", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      name: document.getElementById("name").value,
+      lat: latitude,
+      lon: longitude,
+      weather: weather,
+      image: imageData,
+      q1: q1, q2: q2, q3: q3, q4: q4
+    })
+  }).then(res => res.text()).then(msg => console.log("送信成功:", msg)).catch(err => alert("送信エラー: " + err));
+
+  switchScreen("doneScreen");
+}
+</script>
+
+</body>
+</html>
