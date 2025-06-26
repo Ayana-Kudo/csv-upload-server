@@ -1,49 +1,72 @@
-// server.js
-const express = require('express');
-const fs = require('fs');
-const cors = require('cors');
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const cors = require("cors");
+
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 
+// 💡 JSONサイズ制限を5MBに拡張
+app.use(express.json({ limit: "5mb" }));
 app.use(cors());
-app.use(express.json());
 
-app.post('/upload', (req, res) => {
-  const data = req.body;
+// CSVファイルのパス
+const csvPath = path.join(__dirname, "responses.csv");
 
-  // CSVの1行を作成
-  const values = [
-    new Date().toLocaleString(),
-    data.name,
-    data.gender,
-    data.age,
-    data.lat,
-    data.lon,
-    data.weather,
-    data.q1,
-    data.q2,
-    data.q3,
-    data.q4
-  ];
+// 初期ヘッダー（ファイルがないときに作成）
+if (!fs.existsSync(csvPath)) {
+  fs.writeFileSync(
+    csvPath,
+    "name,gender,age,latitude,longitude,weather,q1,q2,q3,q4,time\n",
+    "utf8"
+  );
+}
 
-  const csvLine = `"${values.map(v => (v ?? '').toString().replace(/"/g, '""')).join('","')}"\n`;
+// POSTリクエスト受け取り
+app.post("/upload", (req, res) => {
+  const {
+    name,
+    gender,
+    age,
+    lat,
+    lon,
+    weather,
+    q1,
+    q2,
+    q3,
+    q4
+  } = req.body;
 
-  // ファイルに追記（CSVがなければ新しく作る）
-  const filePath = './responses.csv';
-  if (!fs.existsSync(filePath)) {
-    const headers = '"日時","名前","性別","年齢","緯度","経度","天気","Q1","Q2","Q3","Q4"\n';
-    fs.writeFileSync(filePath, headers + csvLine);
-  } else {
-    fs.appendFileSync(filePath, csvLine);
-  }
+  const now = new Date().toISOString();
 
-  res.send('CSVに保存しました！');
+  // 各フィールドをCSVに合わせてエスケープ
+  const escape = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
+
+  const row = [
+    escape(name),
+    escape(gender),
+    escape(age),
+    lat,
+    lon,
+    escape(weather),
+    escape(q1),
+    escape(q2),
+    escape(q3),
+    escape(q4),
+    now
+  ].join(",") + "\n";
+
+  fs.appendFile(csvPath, row, (err) => {
+    if (err) {
+      console.error("CSV保存中にエラー:", err);
+      return res.status(500).send("保存に失敗しました");
+    }
+    console.log("✅ CSVに保存完了！");
+    res.send("保存しました！");
+  });
 });
 
-app.get('/', (req, res) => {
-  res.send('CSVアンケート保存サーバー稼働中！');
-});
-
+// サーバー起動
 app.listen(PORT, () => {
-  console.log(`📡 Listening on port ${PORT}`);
+  console.log(`📡 Server running on port ${PORT}`);
 });
