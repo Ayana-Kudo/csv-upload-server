@@ -1,60 +1,89 @@
 const express = require("express");
+const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const port = process.env.PORT || 3000;
+const upload = multer();
 
-// 📄 CSVファイルの準備
-const csvPath = path.join(__dirname, "responses.csv");
-if (!fs.existsSync(csvPath)) {
-  fs.writeFileSync(
-    csvPath,
-    "timestamp,name,gender,age,latitude,longitude,weather,q1,q2,q3,q4\n",
-    "utf8"
-  );
+app.use(cors());
+app.use(express.static("public"));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+const filePath = path.join(__dirname, "responses.csv");
+
+// 初回起動時にファイルがなければヘッダー行を作成
+if (!fs.existsSync(filePath)) {
+  const header = [
+    "timestamp",
+    "name",
+    "gender",
+    "age",
+    "latitude",
+    "longitude",
+    "weather",
+    "q1",
+    "q2",
+    "q3",
+    "q4"
+  ];
+  fs.writeFileSync(filePath, "\uFEFF" + header.join(",") + "\n", "utf8");
 }
 
-app.use(express.json({ limit: "5mb" }));
-app.use(cors());
-
-// 📥 アップロード処理（アンケートのみ）
-app.post("/upload", (req, res) => {
+// データ受け取り用エンドポイント
+app.post("/submit", upload.none(), (req, res) => {
+  const now = new Date().toISOString();
   const {
-    name, gender, age, lat, lon,
-    weather, q1, q2, q3, q4
+    name,
+    gender,
+    age,
+    latitude,
+    longitude,
+    weather,
+    q1,
+    q2,
+    q3,
+    q4
   } = req.body;
 
-  const now = new Date().toISOString();
-
-  const escape = (s) => `"${String(s || "").replace(/"/g, '""')}"`;
   const row = [
-    now, name, gender, age,
-    lat, lon, weather,
-    q1, q2, q3, q4
-  ].map(escape).join(",") + "\n";
+    now,
+    name,
+    gender,
+    age,
+    latitude,
+    longitude,
+    weather,
+    q1,
+    q2,
+    q3,
+    q4
+  ];
 
-  fs.appendFile(csvPath, row, (err) => {
+  const escaped = row.map(value => {
+    const s = String(value ?? "");
+    return `"${s.replace(/"/g, '""')}"`;
+  });
+
+  fs.appendFile(filePath, escaped.join(",") + "\n", "utf8", (err) => {
     if (err) {
-      console.error("❌ CSV保存エラー:", err.message);
-      return res.status(500).send("保存に失敗しました");
+      console.error("❌ 書き込みエラー:", err);
+      return res.status(500).send("Error saving response");
     }
-    console.log("✅ CSV保存完了");
-    res.send("保存しました！");
+    res.send("Success");
   });
 });
 
-// 📤 ダウンロードエンドポイント
+// ダウンロード用エンドポイント
 app.get("/download", (req, res) => {
-  if (!fs.existsSync(csvPath)) {
-    return res.status(404).send("CSVが存在しません");
-  }
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.download(csvPath, "responses.csv");
+  res.setHeader("Content-Disposition", "attachment; filename=responses.csv");
+  res.setHeader("Content-Type", "text/csv; charset=UTF-8");
+  fs.createReadStream(filePath).pipe(res);
 });
 
-// 🚀 サーバー起動
-app.listen(PORT, () => {
-  console.log(`📡 Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
 });
